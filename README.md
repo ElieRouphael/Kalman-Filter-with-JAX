@@ -43,3 +43,20 @@ The Kalman filter uses the learned dynamics to perform state estimation:
 We minimize the **mean squared error** between the observed output and the Kalman-predicted state:
 
 loss = mean((y_true - y_pred)^2)
+
+## 📖 Credits
+Developed as a pedagogical example by a control systems lecturer and researcher in AI and system identification.
+
+## 🤝 Contributing
+If you're a student, educator, or researcher interested in:
+
+- Control theory
+
+- Hybrid learning models
+
+- Kalman filtering with neural nets
+
+Feel free to fork, explore, and contribute ideas via pull requests!
+
+## 📬 Contact
+For questions, suggestions, or collaboration opportunities, please reach out via GitHub issues or contact me directly on [LinkedIn](https://www.linkedin.com/in/elie-rouphael/).
