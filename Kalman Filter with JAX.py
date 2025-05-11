@@ -163,7 +163,7 @@ def generate_synthetic_data(key, n_steps=100):
     return F, H, Q, R, true_states, measurements
 
 # Generate synthetic data
-F, H, Q, R, true_states, measurements = generate_synthetic_data(key)
+F, H, Q, R, true_states, measurements = generate_synthetic_data(key, n_steps=1000)
 
 ## Run Filters (pure functional style)
 
