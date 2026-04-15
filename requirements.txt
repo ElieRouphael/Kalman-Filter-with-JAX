@@ -1,0 +1,6 @@
+jax[cpu]>=0.4
+optax>=0.2
+matplotlib>=3.8
+numpy>=1.26
+pandas>=2.2
+pytest>=8.0

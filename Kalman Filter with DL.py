@@ -1,3 +1,110 @@
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import numpy as np
+import optax
+from jax import random
+
+from kalman_jax.learned_dynamics import (
+    compute_dynamics_error,
+    generate_data,
+    init_mlp_params,
+    predict_with_kalman,
+    train_learned_kalman,
+)
+
+
+def plot_kalman_margins(preds, targets, stds, factor=1.96):
+    timesteps = np.arange(len(preds))
+    for state_index in range(preds.shape[1]):
+        plt.figure(figsize=(8, 6))
+        plt.plot(timesteps, targets[:, state_index], label=f"True x[{state_index}]")
+        plt.plot(timesteps, preds[:, state_index], label=f"KF Pred x[{state_index}]")
+        plt.fill_between(
+            timesteps,
+            preds[:, state_index] - factor * stds[:, state_index],
+            preds[:, state_index] + factor * stds[:, state_index],
+            alpha=0.3,
+            label=f"Margin +/-{factor} sigma",
+        )
+        plt.xlabel("Time Step")
+        plt.ylabel("Value")
+        plt.title(f"Kalman Prediction x[{state_index}] with +/-{factor} sigma margin")
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+
+def plot_loss(losses):
+    plt.figure(figsize=(8, 6))
+    plt.plot(np.arange(len(losses)), losses, label="Training Loss")
+    plt.xlabel("Training Steps")
+    plt.ylabel("Loss")
+    plt.title("Training Loss Over Time")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+def plot_error(error):
+    plt.figure(figsize=(8, 6))
+    plt.plot(np.arange(len(error)), error[:, 0], label="Error in x[0]")
+    plt.plot(np.arange(len(error)), error[:, 1], label="Error in x[1]")
+    plt.xlabel("Time Step")
+    plt.ylabel("Error")
+    plt.title("Error Between Real and Learned Dynamics")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+def main():
+    xs, us, ys = generate_data(T=50)
+
+    key_init = random.PRNGKey(42)
+    params = init_mlp_params(key_init, [3, 16, 16, 16, 16, 2])
+
+    # Keep the model's known linear part aligned with the data generator so the
+    # MLP only has to learn the nonlinear residual.
+    A = jnp.array([[1.0, 0.1], [0.0, 1.0]])
+    B = jnp.array([[0.0], [0.1]])
+    C = jnp.eye(2)
+    Q = 0.1 * jnp.eye(2)
+    R = 0.5 * jnp.eye(2)
+    x0 = jnp.zeros(2)
+    P0 = jnp.eye(2)
+
+    optimizer = optax.adam(1e-3)
+    params, _, losses = train_learned_kalman(
+        params,
+        optimizer,
+        A=A,
+        B=B,
+        C=C,
+        Q=Q,
+        R=R,
+        x0=x0,
+        P0=P0,
+        us=us,
+        ys=ys,
+        num_steps=1000,
+        log_every=100,
+    )
+
+    y_preds_kf, Ps = predict_with_kalman(us, ys, params, A, B, C, Q, R, x0, P0)
+    stds = np.sqrt(np.array([np.diag(P) for P in np.array(Ps)]))
+    error, _, _ = compute_dynamics_error(xs, us, params, A, B, A_true=A, B_true=B)
+
+    plot_loss(np.array(losses))
+    plot_error(np.array(error))
+    plot_kalman_margins(np.array(y_preds_kf), np.array(ys), stds)
+
+
+if __name__ == "__main__":
+    main()
+    raise SystemExit
+
+# Legacy prototype retained below for reference. It is unreachable because the
+# script exits immediately after running main().
 import jax
 import jax.numpy as jnp
 import optax
