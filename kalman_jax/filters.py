@@ -58,7 +58,16 @@ def extended_kf_update(x, P, z, h, H_jacobian, R):
     return x_updated, P_updated, innovation, innovation_cov
 
 
-def _unscented_weights(state_dim, alpha=1e-3, beta=2.0, kappa=0.0):
+def _unscented_weights(state_dim, alpha=1.0, beta=2.0, kappa=0.0):
+    """Sigma-point weights (Wan & van der Merwe parametrisation).
+
+    The textbook default alpha=1e-3 gives lambda = alpha**2 (n + kappa) - n, i.e. a centre weight of
+    about -n/(alpha**2 (n + kappa)) ~ -1e6 and outer weights ~ +2.5e5 for n=2. Reconstructing a covariance
+    from such weights is a catastrophic cancellation that JAX's default float32 cannot survive: the
+    covariance loses positive-definiteness and the filter returns NaN (on the linear demo from step 335).
+    alpha=1.0 (lambda=0 for kappa=0, all weights of order one) is exact on linear models and safe in float32;
+    use a small alpha only with jax_enable_x64.
+    """
     lambda_ = alpha**2 * (state_dim + kappa) - state_dim
     scale = state_dim + lambda_
 
@@ -69,7 +78,7 @@ def _unscented_weights(state_dim, alpha=1e-3, beta=2.0, kappa=0.0):
     return scale, Wm, Wc
 
 
-def _sigma_points(x, P, alpha=1e-3, beta=2.0, kappa=0.0, jitter=1e-9):
+def _sigma_points(x, P, alpha=1.0, beta=2.0, kappa=0.0, jitter=1e-9):
     state_dim = x.shape[0]
     scale, Wm, Wc = _unscented_weights(state_dim, alpha=alpha, beta=beta, kappa=kappa)
     sqrt_P = jnp.linalg.cholesky(P + jitter * jnp.eye(state_dim, dtype=P.dtype))
@@ -81,7 +90,7 @@ def _sigma_points(x, P, alpha=1e-3, beta=2.0, kappa=0.0, jitter=1e-9):
     return sigma_points, Wm, Wc
 
 
-def unscented_kf_predict(x, P, f, Q, alpha=1e-3, beta=2.0, kappa=0.0):
+def unscented_kf_predict(x, P, f, Q, alpha=1.0, beta=2.0, kappa=0.0):
     """Pure function for the UKF prediction step."""
     sigma_points, Wm, Wc = _sigma_points(x, P, alpha=alpha, beta=beta, kappa=kappa)
     transformed_points = jax.vmap(f)(sigma_points)
@@ -94,7 +103,7 @@ def unscented_kf_predict(x, P, f, Q, alpha=1e-3, beta=2.0, kappa=0.0):
     return x_pred, P_pred
 
 
-def unscented_kf_update(x, P, z, h, R, alpha=1e-3, beta=2.0, kappa=0.0):
+def unscented_kf_update(x, P, z, h, R, alpha=1.0, beta=2.0, kappa=0.0):
     """Pure function for the UKF update step."""
     sigma_points, Wm, Wc = _sigma_points(x, P, alpha=alpha, beta=beta, kappa=kappa)
     transformed_points = jax.vmap(h)(sigma_points)
@@ -177,7 +186,7 @@ def run_ekf(measurements, f, h, F_jacobian, H_jacobian, Q, R, x0, P0):
     return estimated_states
 
 
-def run_ukf(measurements, f, h, Q, R, x0, P0, alpha=1e-3, beta=2.0, kappa=0.0):
+def run_ukf(measurements, f, h, Q, R, x0, P0, alpha=1.0, beta=2.0, kappa=0.0):
     """Run the UKF over a measurement sequence."""
 
     def step(carry, measurement):

@@ -33,7 +33,8 @@ def test_load_air_quality_frame_parses_semicolon_decimal_and_missing_values(tmp_
     assert frame["timestamp"].is_monotonic_increasing
     assert frame["PT08.S1(CO)"].isna().sum() == 1
 
-    dataset = build_no2_forecasting_dataset(frame, input_columns=DEFAULT_INPUT_COLUMNS, train_fraction=0.5, val_fraction=0.25)
+    dataset = build_no2_forecasting_dataset(frame, input_columns=DEFAULT_INPUT_COLUMNS, train_fraction=0.5, val_fraction=0.3)
+    # 10 rows -> 9 complete -> 8 after the -200 row -> 7 with a next-row target; 0.5/0.25 left an empty validation split.
     assert dataset["splits"]["train"]["controls"].shape[1] == len(DEFAULT_INPUT_COLUMNS)
 
 

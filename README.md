@@ -159,3 +159,33 @@ The script compares:
 - a Kalman-style learned forecaster in JAX
 
 Place the CSV at `data/raw/AirQualityUCI.csv`, or pass `--csv` with the file path.
+
+## Known limitations and corrections (October 2026 review)
+
+A line-by-line reproduction of the three experiments (see the interactive course at
+https://elierouphael.github.io/tutorials/kalman-jax/) found the following; the code changes are applied, the
+rest is documented here rather than hidden.
+
+- **UKF in float32.** The textbook sigma-point spread `alpha=1e-3` produces weights of about -1e6 and +2.5e5
+  for a two-dimensional state. In JAX's default 32-bit arithmetic the covariance reconstruction cancels
+  catastrophically, the covariance loses positive-definiteness and the UKF returns NaN (from step 335 of the
+  linear demo); two tests failed for this reason. The default is now `alpha=1.0`, which is exact on linear
+  models and matches the linear filter to 32-bit rounding. Use a small `alpha` only with
+  `jax.config.update("jax_enable_x64", True)`.
+- **Air-quality test fixture.** The ten-row fixture leaves seven usable rows, so a 25% validation slice was
+  empty and the test raised "Forecast horizon is too large"; the test now uses a 30% validation fraction.
+- **Learned residual (`Kalman Filter with DL.py`).** The script evaluates the learned model only on the rollout
+  it was trained on. On fresh rollouts of the same plant the learned filter's one-step forecast RMSE is about
+  8.5 against 2.9 for a filter with no residual at all: the double-integrator plant wanders far outside the
+  training region (|x| up to 30) and a tanh network cannot extrapolate the periodic residual. The filter's noise
+  matrices (`Q=0.1 I`, `R=0.5 I`) also do not match the simulator (no process noise, measurement sd 0.05), and
+  `loss_fn` scores the *filtered* state, which already contains the measurement (the forecast loss in
+  `forecasters.py` is the honest objective). With a bounded plant (eigenvalues 0.9), matched noise and a 500-step
+  rollout the learned residual does transfer (forecast RMSE 1.80 vs 2.18 without it). Note also that the
+  generator adds the scalar residual `3 sin(x0) + 2 cos(x1)` to *both* state components by broadcasting.
+- **Air-quality forecaster.** On the test split (16 Feb to 4 Apr 2005) the Kalman-MLP scores RMSE 33.7 µg/m³,
+  persistence 25.4, and a linear model that includes the current NO2 reading 24.9 (the script's linear baseline
+  omits that reading and scores 43.9). The Kalman state is a lagged copy of the series (steady-state gain 0.31),
+  which is why the learned model loses; retuning the noise brings it to 29.4, still behind persistence. Adding
+  hour-of-day features to the linear model reaches 21.6. The next-row target also crosses gaps in the record
+  (25 such places in the test split).
